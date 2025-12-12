@@ -1,5 +1,8 @@
-# webPTT
+
+# WebPTT
+
 Web-based Visualization and Analysis of NASA Planetary Topography Data Sets
+![WebPTT](./img/webPTT-mars2.png)
 
 ## webPTT Overview
 webPTT is a web application designed for the visualization and analysis of planetary topography data sets provided by NASA. It allows users to interactively explore high-resolution topographic maps, perform data analysis, and generate visualizations for research and educational purposes.    
