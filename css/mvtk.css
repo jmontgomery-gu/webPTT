@@ -1,0 +1,135 @@
+.item {
+  display: inline-block;
+  margin: 1em;
+  padding: 1em;
+}
+.label {
+  margin-top: 0.5em;
+  /* position: absolute; */
+  left: 100px;
+}
+.label2 {
+  margin-top: 0.5em;
+  /* position: absolute; */
+  left: 100px;
+}
+
+canvas {
+  border: 1px dashed orchid;
+
+  /* width: 100%;
+  height: 100%;
+  */
+}
+
+.tool-effect {
+  border-style: solid;
+  border-color: #BEBEBE;
+  border-width: 1;
+  opacity: .75;
+}
+
+.tool-effect:hover {
+  border-style: solid;
+  border-color: #808080;
+  border-width: 1;
+  opacity: 1.0;
+}
+
+.planet-effect {
+  border-style: solid;
+  border-color: #000000;
+  border-width: 2px;
+}
+
+.planet-effect:hover {
+  border-style: solid;
+  border-color: blue;
+  border-width: 2px;
+}
+
+body {
+  background-color: #101010;
+  color: #ffffff;
+}
+
+h1 {
+  color: #ffffff;
+}
+
+h3 {
+  color: #ffffff;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.grid-container {
+  display: grid;
+  grid-template-columns: 50px 50px auto auto 100px;
+  gap: 0px;
+  grid-auto-rows: minmax(100px, auto);
+  justify-content: left;
+}
+.title {
+  grid-column: 3 / span 2;
+  grid-row: 1;
+  text-align: center;
+}
+.moon {
+  grid-column: 1 / span 2;
+  grid-row: 1;
+  text-align: center;
+}
+.mars {
+  grid-column: 5 / span 1;
+  grid-row: 1;
+  text-align: center;
+}
+.tools-0 {
+  grid-column: 1 / span 1;
+  grid-row: 2;
+  text-align: center;
+}
+.tools-1 {
+  grid-column: 1 / span 1;
+  grid-row: 3;
+  text-align: center;
+}
+.navigation {
+  grid-column: 2 / span 2;
+  grid-row: 2;
+  text-align: center;
+}
+.plots {
+  grid-column: 4 / span 2;    
+  grid-row: 2;
+  text-align: center;
+}
+.highres {
+  grid-column: 2 / span 4;
+  grid-row: 3;
+  text-align: center;
+}
+.logtext {
+  grid-column: 6;
+  grid-row: 2 / span 2;
+  text-align: left;
+  overflow: true;
+}
+.textureCanvas {
+  display:none;
+}
+.form-popup {
+  display: none;
+  background-color: #101010;
+  color: #ffffff;
+  grid-column: 2 / span 2;
+  grid-row: 2;
+  text-align: left;
+  border: 3px solid #96029b;
+  z-index: 9;
+}
+
+.settingsText { margin-left: 20px; }
+
+.settingsTab { margin-left: 40px; }

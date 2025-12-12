@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Web-based Planetary Topography Toolkit-Beta</title>
+    <!-- Author(s): J. Montgomery, J. McDonald -->
+     <!-- Created: June 2024 -->
+      <!-- Version: 0.9 Beta -->
+  
+    <script src="js/gl-matrix-min.js"></script>
+    <script src="js/d3.js"></script>
+    <script src="js/spherical_geometry.js"></script>
+    <!--
+    <script src="https://cdn.jsdelivr.net/npm/spherical-geometry-js@3.0.2/src/index.min.js"></script>
+    -->
+
+    <!-- 
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    -->
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <link rel="stylesheet" href="css/mvtk.css" type="text/css" />
+
+    <style></style>
+  </head>
+  <body onload="mymain()">
+
+    <div class="grid-container" id="grid">
+      <div class="title">
+        <div class="w3-container" style="text-align: center">
+          <h1>
+            webPTT: Web-based Planetary Topographical Exploration Toolkit
+          </h1>
+          <div class="Progression" id="download" style="display:none">
+            <label id="lblDownload" style="color:yellow">Retrieving Selected Planetary Data
+              <progress id="downloadProgress" value="0" max="100" style="color:yellow"> </progress>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="tools-0">
+        <h3 style="color: black">_</h3>
+        <img
+          id="imgCoordinates"
+          title="Jump to Lat/Lon"
+          class="tool-effect"
+          src="img/icons/Coordinates.png"
+          alt="Coordinate search"
+          width="44"
+          height="44"
+        />
+        <img
+          id="imgSettings"
+          title="Settings"
+          class="tool-effect"
+          src="img/icons/Settings.png"
+          alt="Settings"
+          width="44"
+          height="44"
+        />
+      </div>
+
+      <div class="tools-1">
+        <img
+          id="imgNavigation"
+          title="Navigation"
+          class="tool-effect"
+          src="img/icons/Navigation.png"
+          alt="Navigation tool"
+          width="44"
+          height="44"
+        />
+        <img
+          id="imgProfile"
+          title="Profile Measurement"
+          class="tool-effect"
+          src="img/icons/Profile.png"
+          alt="Profile tool"
+          width="44"
+          height="44"
+        />
+        <img
+          id="imgArea"
+          title="Area Measurement"
+          class="tool-effect"
+          src="img/icons/Area.png"
+          alt="Area tool"
+          width="44"
+          height="44"
+        />
+        <img
+          id="imgDownload"
+          title="Download Selected Rectangle"
+          class="tool-effect"
+          src="img/icons/Download.png"
+          alt="Download data"
+          width="44"
+          height="44"
+        />
+        <img
+          id="imgAreaThreeD"
+          title="Display 3D Area Rendering"
+          class="tool-effect"
+          src="img/icons/Area3D.png"
+          alt="Render 3D"
+          width="44"
+          height="44"
+        />
+      </div>
+
+      <div class="moon">
+        <img
+          id="imgMoon"
+          class="planet-effect"
+          src="img/icons/Moon2.jpg"
+          alt="Image of moon"
+          width="100"
+          height="100"
+        />
+      </div>
+
+      <div id="imgMars" class="mars">
+        <img
+          class="planet-effect"
+          src="img/icons/Mars.jpg"
+          alt="Image of mars"
+          width="100"
+          height="100"
+        />
+      </div>
+
+      <div class="form-popup" id="settingsForm">
+        <form action="/action_page.php" class="form-container">
+          <h2 class="settingsText"><b>Settings</b></h2>
+          <p class="settingsText"><b>Planetary body:</b>
+          <input type="radio" id="selectMoon" name="body" value="Moon" checked>
+          <label for="selectMoon">Moon</label>
+          <input type="radio" id="selectMars" name="body" value="Mars">
+          <label for="selectMars">Mars</label>
+          </p>
+
+          <p class="settingsText"><b>Shading Type:</b>
+          <input type="radio" id="monochrome" name="shading" value="monochrome" checked>
+          <label for="monochrome">monochrome shading</label>
+          <input type="radio" id="falsecolor" name="shading" value="falseColor">
+          <label for="falsecolor">false color</label>
+          </p>
+
+          <p class="settingsText">Shader Settings</p>
+          <label class="settingsTab" for="reliefStrength">relief strength</label>
+          <input type="number" id="reliefStrength" name="reliefStrength" value="1.0" min="0.0" max="10.0" step="0.1">
+
+          <!--
+          <p>
+            <button class="favorite styled" type="button">Close</button>
+            <button class="favorite styled" type="button">Cancel</button>
+          </p>
+          -->
+        </form>
+      </div>
+
+      <div
+        class="plots"
+        id="graph_div"
+        background-color="powderblue"
+        position="absolute"
+        top="0px"
+        left="0px"
+        style="text-align: center"
+      >
+        <h3>Height profile plot</h3>
+        <svg id="svg"></svg>
+      </div>
+
+      <div
+        class "logpanel"
+
+        <div
+          class="logheader"
+          id="logHeader_div"
+          background-color="powderblue"
+          position="absolute"
+          top="0px"
+          left="0px"
+          style="text-align: center">
+          <h3></h3>
+          <svg id="svg"></svg>
+        </div>
+
+        <div class="logtext" id="logText_div" style="height:936px;width:600px;border:1px solid #ccc;font:16px/26px Georgia, Garamond, Serif;overflow:auto;">
+          Analysis Output  
+        </div>
+      </div>
+    </div>
+
+    <canvas class="textureCanvas" id="coordMinTexture" width="300px" height="48px"></canvas>
+    <canvas class="textureCanvas" id="coordMaxTexture" width="300px" height="48px"></canvas>
+    <canvas class="textureCanvas" id="coordCursor" width="450px" height="48px"></canvas>
+    <canvas class="textureCanvas" id="featureNameTexture" width="300px" height="48px"></canvas>
+
+    <!--  Main div-tag to load two canvas under-->
+    <script src="js/main.js"></script>
+  </body>
+</html>
