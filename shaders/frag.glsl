@@ -28,9 +28,9 @@ void main(void)
     float texelWidth = 1.0 / texResolution;
     vec2 tex = vTextureCoord; 
     height = texture(uSampler, tex).r / texScale;
-    height = (height - heightRange[0]) / (heightRange[1] - heightRange[0]);   // Convert to a [0 --> 1] value for the color lookup.  Need to remove these magic numbers
+    height = (height - heightRange[0]) / (heightRange[1] - heightRange[0]);   // Convert to a [0 --> 1] value for the color lookup. 
     vec4 colorFalse = texture(uColorSampler, vec2(height, 0.0));
-    vec4 colorMono = vec4((height + .35) * monoColor + vec3(.2, .2, .2), 1.0);  // .35 is an ambient "bounced" light, and the .2 brightens everything up uniformly
+    vec4 colorMono = vec4((height + .35) * monoColor + vec3(.2, .2, .2), 1.0);  // .35 is an ambient "minimum" light, and the .2 gray brightens everything up uniformly
     color = mix(colorFalse, colorMono, useMono);
 
     // We need to measure the clamped distance here on each so that we can properly calculate the 

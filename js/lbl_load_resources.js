@@ -213,6 +213,51 @@ export async function lbl_load_resources_main(img_file_name="megt00n000hb", subt
     const lbl_main_wwt = new Worker("./js/lbl_worker_main.js");
     const lbl_main_rwt = new Worker('./js/lbl_worker_read.js');
 
+    const readCompletePromise = new Promise((resolve) => {
+        // Read Worker Thread
+        // 1. reads tile-slice from OPFS
+        // 2. Creates array of tile-slices for one HiRes panel
+        // 3. sets global array with meta-data and image files for display
+        let subtile_array = [];
+        lbl_main_rwt.onmessage = function(message){
+            if(message.data.success === true ) {
+                const subtile_img = new Int16Array(message.data.tile_data);
+                const [ lat_max, lat_min, lon_min, lon_max] = message.data.lat_lon;
+                let beta_tileParams = new tileInfo(
+                    16,
+                    ////////////////// different for lbl ///////////////////////
+                    //////////////////lat_min and lat_max are swapped ///////////////////////
+                    parseFloat(lat_min),
+                    parseFloat(lat_max),
+                    
+                    parseFloat(lon_min),
+                    parseFloat(lon_max),
+                    128,
+                    5760,
+                    5632,
+                    3400,
+                    'int16',
+                    subtile_img
+                );
+                subtile_array.push(beta_tileParams);
+
+                if(subtile_array.length === 2){
+                    console.log (`tile load complete:  ${subtile_array.length}`);
+                    subtile_array.reverse();
+                    newTiles = subtile_array;
+                    lbl_main_rwt.terminate();
+                    resolve();
+                }
+            }
+            else{
+                console.log("Could not read from local storage");
+                lbl_main_rwt.terminate();
+                resolve();
+            }
+
+        }
+    });
+
     //
     // post message to check directory exists worker thread
     //
@@ -263,50 +308,6 @@ export async function lbl_load_resources_main(img_file_name="megt00n000hb", subt
         }
     }
 
-    // Read Worker Thread
-    // 1. reads tile-slice from OPFS
-    // 2. Creates array of tile-slices for one HiRes panel
-    // 3. sets global array with meta-data and image files for display
-    //
-    let subtile_array = [];
-    lbl_main_rwt.onmessage = function(message){
-        if(message.data.success === true ) {
-            const subtile_img = new Int16Array(message.data.tile_data);
-            const [ lat_max, lat_min, lon_min, lon_max] = message.data.lat_lon;
-            let beta_tileParams = new tileInfo(
-                16,
-                ////////////////// different for lbl ///////////////////////
-                //////////////////lat_min and lat_max are swapped ///////////////////////
-                parseFloat(lat_min),
-                parseFloat(lat_max),
-                
-                parseFloat(lon_min),
-                parseFloat(lon_max),
-                128,
-                5760,
-                5632,
-                3400,
-                'int16',
-                subtile_img
-            );
-            subtile_array.push(beta_tileParams);
-        
-            if(subtile_array.length === 2){
-                console.log (`tile load complete:  ${subtile_array.length}`);
-                subtile_array.reverse();
-                newTiles = subtile_array;
-                initTextures_hiRes_afterLoad();
-                lbl_main_rwt.terminate();
 
-            }
-            // const subtiles_imgData = new Uint8Array(message.data.imgBuffer[0]);
-            // console.log(subtiles_imgData);
-            // delete message.imgBuffer;
-        }
-        else{
-            console.log("Could not read from local storage");
-            lbl_main_rwt.terminate();
-        }
-
-    }
+    await readCompletePromise;
 }

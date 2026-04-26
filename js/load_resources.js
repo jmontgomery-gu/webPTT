@@ -103,6 +103,46 @@ export async function load_resources_main(img_file_name, subtile_file_names){
     const main_wwt = new Worker("./js/worker_main.js");
     const main_rwt = new Worker('./js/worker_read.js');
 
+        const readCompletePromise = new Promise((resolve) => {
+        // read worker thread
+        let subtile_array = [];
+        main_rwt.onmessage = function(message){
+            if(message.data.success === true ) {
+                const subtile_img = new Int16Array(message.data.tile_data);
+                const [lat_min, lat_max, lon_min, lon_max] = message.data.lat_lon;
+                let beta_tileParams = new tileInfo(
+                    16,
+                    parseFloat(lat_min),
+                    parseFloat(lat_max),
+                    parseFloat(lon_min),
+                    parseFloat(lon_max),
+                    512,
+                    5760,
+                    5760,
+                    3400,
+                    'int16',
+                    subtile_img
+                );
+                subtile_array.push(beta_tileParams);
+
+                if(subtile_array.length === 8){
+                    console.log (`tile load complete:  ${subtile_array.length}`);
+                    subtile_array.reverse();
+                    newTiles = subtile_array;
+                    main_rwt.terminate();
+                    resolve();
+                }
+
+            }
+            else{
+                console.log("Could not read from local storage");
+                main_rwt.terminate();
+                resolve();
+            }
+
+        }
+    });
+
     main_cwt.postMessage({dir_name: img_file_name})
 
     main_cwt.onmessage =  async function(message){
@@ -145,45 +185,7 @@ export async function load_resources_main(img_file_name, subtile_file_names){
 
     // read worker thread
 
-    let subtile_array = [];
-    main_rwt.onmessage = function(message){
-        if(message.data.success === true ) {
-            const subtile_img = new Int16Array(message.data.tile_data);
-            const [lat_min, lat_max, lon_min, lon_max] = message.data.lat_lon;
-            let beta_tileParams = new tileInfo(
-                16,
-                parseFloat(lat_min),
-                parseFloat(lat_max),
-                parseFloat(lon_min),
-                parseFloat(lon_max),
-                512,
-                5760,
-                5760,
-                3400,
-                'int16',
-                subtile_img
-            );
-            subtile_array.push(beta_tileParams);
-        
-            if(subtile_array.length === 8){
-                console.log (`tile load complete:  ${subtile_array.length}`);
-                subtile_array.reverse();
-                newTiles = subtile_array;
-                initTextures_hiRes_afterLoad();
-                main_rwt.terminate();
-
-            }
-
-        }
-        else{
-            console.log("Could not read from local storage");
-            main_rwt.terminate();
-        }
-
-    }
-    /*
-    //webworker_main();
-    */
+    await readCompletePromise;
     console.log("load_resources_main, done");
     return ;
 }

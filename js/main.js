@@ -891,6 +891,7 @@ function addCanvas() {
 
   document.getElementById("imgDownload").setAttribute("style", "display:none");
   document.getElementById("imgAreaThreeD").setAttribute("style", "display:none");
+  UpdateDownloadButtonTooltip();
 
   document
     .getElementById("imgNavigation")
@@ -945,7 +946,7 @@ function addCanvas() {
 
   CreateProfileGraph([]);
 
-  imgCoordinates.addEventListener("click", (event) => {
+  imgCoordinates.addEventListener("click", async (event) => {
     var coordStr = prompt(
       "Enter coordinates in the form (latitude, longitude):"
     );
@@ -955,11 +956,35 @@ function addCanvas() {
       var latitude = Number(coordArray[0]);
       var longitude = Number(coordArray[1]);
       
+      // Clear any in-progress interaction state so the next mouse event
+      // does not immediately overwrite the requested center.
+      panning_hiRes = false;
+      zooming_hiRes = false;
+      rotating3D = false;
+      zooming3D = false;
+      
       console.log(
         "Chosen quarter-panel number: " +
           panelKey(latitude, longitude, DpanelHeightLat(), DpanelWidthLon())
       ); // These are moon latitude/longitude ranges for 512ppd maps
-   
+      
+
+      mouse_click_longitude = longitude;
+      mouse_click_latitude = latitude;
+
+      // Show the requested location immediately while tiles are loading.
+      rendering3D = false;
+      viewCenter_hiRes = [longitude, latitude];
+      drawScene_hiRes();
+
+      // Wait for the tile load to finish, then re-assert the exact requested
+      // coordinates so that initTextures_hiRes cannot overwrite them.
+      await initTextures_hiRes(
+        panelKey(latitude, longitude, DpanelHeightLat(), DpanelWidthLon() ),
+        true
+      );
+      viewCenter_hiRes = [longitude, latitude];
+      drawScene_hiRes();
     }
   });
 
@@ -1005,6 +1030,7 @@ function addCanvas() {
 
   imgNavigation.addEventListener("click", (event) => {
     curMode = navMode;
+    UpdateDownloadButtonTooltip();
     document
       .getElementById("imgNavigation")
       .setAttribute(
@@ -1028,6 +1054,7 @@ function addCanvas() {
 
   imgProfile.addEventListener("click", (event) => {
     curMode = profileMode;
+    UpdateDownloadButtonTooltip();
     document
       .getElementById("imgNavigation")
       .setAttribute(
@@ -1051,6 +1078,7 @@ function addCanvas() {
 
   imgArea.addEventListener("click", (event) => {
     curMode = areaMode;
+    UpdateDownloadButtonTooltip();
     document
       .getElementById("imgNavigation")
       .setAttribute(
@@ -1081,7 +1109,11 @@ function addCanvas() {
   });
 
   imgDownload.addEventListener("click", (event) => {
-    SaveRectangle();
+     if (curMode === profileMode && profile_svg !== null) {
+      SaveProfile();
+    } else if (curMode === areaMode) {
+      SaveRectangle();
+    }
   });
 
   imgAreaThreeD.addEventListener("click", (event) => {
@@ -1130,7 +1162,8 @@ function addCanvas() {
           panelKey(latitude, longitude, DpanelHeightLat(), DpanelWidthLon() )
       );
       initTextures_hiRes(
-        panelKey(latitude, longitude, DpanelHeightLat(), DpanelWidthLon() )
+        panelKey(latitude, longitude, DpanelHeightLat(), DpanelWidthLon() ),
+        false
       );
       rendering3D = false;
     }
@@ -1172,7 +1205,12 @@ function addCanvas() {
         }
   
         if (pathPointMoving == -1) {
+          if (pathVerts.length == 6)
+            ClearProfileGraph();
+
           if (pathVerts.length == 0) {
+            if (pathVerts.length == 6)
+              ClearProfileGraph();
             // If we don't have any, push the first one twice, so we have a line
             pathVerts.push(longitude, latitude, 0.1);
             firstPathPointMoved = false;
@@ -1183,6 +1221,7 @@ function addCanvas() {
             pathPointMoving = pathVerts.length / 3 - 1;
           }
         }
+
       } else if (curMode == areaMode) {
         if (!rendering3D)
         {
@@ -1215,10 +1254,10 @@ function addCanvas() {
               latitude,
               0.4,
             ];
-    
-            document.getElementById("imgDownload").setAttribute("style", "display:block");
+
             document.getElementById("imgAreaThreeD").setAttribute("style", "display:block");
             areaRectDefined = true;
+            UpdateDownloadButtonVisibility();
             areaDefiningCorner = true;
           }
           else
@@ -1451,6 +1490,8 @@ function addCanvas() {
                  12, "yellow");
         LogPrint("Endpoint 2, [Lat: " + (pathVerts[4]).toFixed(2) + ", Lon: " + (pathVerts[3]).toFixed(2) + ", Elev: " + elev2.toFixed(2) + "]", 
                  12, "yellow");
+
+        UpdateDownloadButtonVisibility();
       }
       if (curMode == areaMode)
       {
@@ -1556,6 +1597,7 @@ function addCanvas() {
   canvas_hiRes.addEventListener("dblclick", (event) => {
     if (curMode == profileMode) {
       pathVerts = [];
+      ClearProfileGraph();
       drawScene_hiRes();
     }
     else if (curMode == areaMode)
@@ -1579,9 +1621,9 @@ function addCanvas() {
         // Clear the rectangle and set the defined flag to false;
         areaRectVertices = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         areaEllipseVertices = [];
-        document.getElementById("imgDownload").setAttribute("style", "display:none");
         document.getElementById("imgAreaThreeD").setAttribute("style", "display:none");
         areaRectDefined = false;
+        UpdateDownloadButtonVisibility();
         drawScene_hiRes();
       }
     }
@@ -1735,6 +1777,41 @@ async function SaveRectangle()
   }
   else
     alert("Please define an area rectangle before attempting to export");
+}
+
+async function SaveProfile()
+{
+  if (profileGraphPoints.length > 0) 
+  {
+    var csvData = 'distance_km,elevation_m\n';
+    for (let i = 0; i < profileGraphPoints.length; i++)
+    {
+      csvData += profileGraphPoints[i][0] + ',' + 
+                 profileGraphPoints[i][1] + '\n';
+    }
+
+    var blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
+    var url = URL.createObjectURL(blob);
+
+    var fileName = "profile_data.csv";
+
+    const handle = await showSaveFilePicker({
+      suggestedName: fileName,
+      startIn: "downloads",
+      types: [{
+          description: "Comma delimited file",
+          accept: {'text/csv': ['.csv']},
+      }],
+    });
+    
+    var pom = document.createElement('a');
+    pom.href = url;
+
+    pom.setAttribute('download', handle.name);
+    pom.click();
+  }
+  else
+    alert("Please generate a profile before attempting to export");
 }
 
 function HeightStatisticsInEllipse(ellipseEdgeRange)
@@ -3247,10 +3324,8 @@ async function initTextures_hiRes_afterLoad(){
     tileArray.push(newTiles[i]);
   }
 
-  let curPanel = panelKey(mouse_click_latitude, mouse_click_longitude, DpanelHeightLat(), DpanelWidthLon() ); //JAMI
-  var panelLatLon = panelCoords(curPanel, DpanelHeightLat(), DpanelWidthLon() ); // Remember, panels are defined with (lat, lon)
-  viewCenter_hiRes[0] = panelLatLon[1] + DpanelWidthLon()  / 2.0; // but coordinate in OpenGL (like viewCenter) are (x, y) = (lon, lat)
-  viewCenter_hiRes[1] = panelLatLon[0] + DpanelHeightLat() / 2.0;
+  // This function should only refresh OpenGL resources for already-loaded tiles.
+  // Do not modify viewCenter_hiRes here; callers own camera positioning.
 
   // 
   // !~!~!~!~!~!~!~!~!~!~!~!     JOHN     !~!~!~!~!~!~!~!~!~!~!~!~!~!
@@ -3378,7 +3453,7 @@ async function initTextures_hiRes_afterLoad(){
 
 
 
-async function initTextures_hiRes(newPanelKey) {
+async function initTextures_hiRes(newPanelKey, centerOnRequestedPoint = true) {
   // Note: We don't have to pre-generate the texture objects because entries will not be
   // stored in the panelArray before they are loaded.  When they are put into the
   // panelArray, they are fully set up and ready to render.  The code in drawScene_hiRes
@@ -3396,7 +3471,7 @@ async function initTextures_hiRes(newPanelKey) {
 
   curPanel = newPanelKey;
 
-  // could also place mouse_click_longitude/mouse_click_latitude in parameters
+  
   // load module to compute panel coordinates
   let calculate_img_name = await import('./calculate_img.js');
 
@@ -3440,49 +3515,138 @@ async function initTextures_hiRes(newPanelKey) {
     tileArray.push(newTiles[i]);
   }
 
-  var panelLatLon = panelCoords(curPanel, DpanelHeightLat(), DpanelWidthLon() ); // Remember, panels are defined with (lat, lon)
-  viewCenter_hiRes[0] = panelLatLon[1] + DpanelWidthLon()  / 2.0; // but coordinate in OpenGL (like viewCenter) are (x, y) = (lon, lat)
-  viewCenter_hiRes[1] = panelLatLon[0] + DpanelHeightLat() / 2.0;
+if (centerOnRequestedPoint)
+  {
+    // Coordinate-entry mode: center exactly on the requested coordinate.
+    viewCenter_hiRes[0] = mouse_click_longitude;
+    viewCenter_hiRes[1] = mouse_click_latitude;
+  }
+  else
+  {
+    // Nav-panel mode: center on the panel so there is no intermediate jump.
+    var panelLatLon = panelCoords(curPanel, DpanelHeightLat(), DpanelWidthLon() );
+    viewCenter_hiRes[0] = panelLatLon[1] + DpanelWidthLon()  / 2.0;
+    viewCenter_hiRes[1] = panelLatLon[0] + DpanelHeightLat() / 2.0;
+  }
   viewSize_hiRes = DpanelHeightLat() / 2;
 
   // Color Texture ... Need to only do this on the first pass.
-  colorTex_hiRes = gl_hiRes.createTexture();
-  gl_hiRes.bindTexture(gl_hiRes.TEXTURE_2D, colorTex_hiRes);
-  gl_hiRes.texImage2D(
-    gl_nav.TEXTURE_2D,
-    0,
-    gl_hiRes.RGB32F,
-    1,
-    1,
-    0,
-    gl_hiRes.RGB,
-    gl_hiRes.FLOAT,
-    null
-  );
-  gl_hiRes.texParameteri(
-    gl_hiRes.TEXTURE_2D,
-    gl_hiRes.TEXTURE_WRAP_S,
-    gl_hiRes.CLAMP_TO_EDGE
-  );
-  gl_hiRes.texParameteri(
-    gl_hiRes.TEXTURE_2D,
-    gl_hiRes.TEXTURE_WRAP_T,
-    gl_hiRes.CLAMP_TO_EDGE
-  );
-  gl_hiRes.texParameteri(
-    gl_hiRes.TEXTURE_2D,
-    gl_hiRes.TEXTURE_MIN_FILTER,
-    gl_hiRes.NEAREST
-  );
-  gl_hiRes.texParameteri(
-    gl_hiRes.TEXTURE_2D,
-    gl_hiRes.TEXTURE_MAG_FILTER,
-    gl_hiRes.NEAREST
-  );
+    if (colorTex_hiRes == null)
+  {
+    colorTex_hiRes = gl_hiRes.createTexture();
+    gl_hiRes.bindTexture(gl_hiRes.TEXTURE_2D, colorTex_hiRes);
+    gl_hiRes.texImage2D(
+      gl_nav.TEXTURE_2D,
+      0,
+      gl_hiRes.RGB32F,
+      1,
+      1,
+      0,
+      gl_hiRes.RGB,
+      gl_hiRes.FLOAT,
+      null
+    );
+    gl_hiRes.texParameteri(
+      gl_hiRes.TEXTURE_2D,
+      gl_hiRes.TEXTURE_WRAP_S,
+      gl_hiRes.CLAMP_TO_EDGE
+    );
+    gl_hiRes.texParameteri(
+      gl_hiRes.TEXTURE_2D,
+      gl_hiRes.TEXTURE_WRAP_T,
+      gl_hiRes.CLAMP_TO_EDGE
+    );
+    gl_hiRes.texParameteri(
+      gl_hiRes.TEXTURE_2D,
+      gl_hiRes.TEXTURE_MIN_FILTER,
+      gl_hiRes.NEAREST
+    );
+    gl_hiRes.texParameteri(
+      gl_hiRes.TEXTURE_2D,
+      gl_hiRes.TEXTURE_MAG_FILTER,
+      gl_hiRes.NEAREST
+    );
 
   // now create an image object that will be loaded from server
   // async
-  fetchColorMap_hiRes(colorTex_hiRes);
+    fetchColorMap_hiRes(colorTex_hiRes);
+  }
+
+  // Setup of low-res preview texture object for the hi-res window should only be setup once too
+  if (previewTexObj == null)
+  {
+    previewTexObj = gl_hiRes.createTexture();
+    gl_hiRes.bindTexture(gl_hiRes.TEXTURE_2D, previewTexObj); // bind texture to textureHandle
+    gl_hiRes.pixelStorei(gl_hiRes.UNPACK_ALIGNMENT, 1);
+    gl_hiRes.pixelStorei(gl_hiRes.PACK_ALIGNMENT, 1);
+  
+    // Height texture
+    // create a default 1x1 texture image temporarily as a place holder
+    gl_hiRes.texImage2D(
+      gl_hiRes.TEXTURE_2D,
+      0,
+      gl_hiRes.R16F,
+      1,
+      1,
+      0,
+      gl_hiRes.RED,
+      gl_hiRes.FLOAT,
+      null
+    );
+    gl_hiRes.generateMipmap(gl_hiRes.TEXTURE_2D);
+    gl_hiRes.texParameteri(
+      gl_hiRes.TEXTURE_2D,
+      gl_hiRes.TEXTURE_MIN_FILTER,
+      gl_hiRes.LINEAR_MIPMAP_LINEAR
+    );
+    gl_hiRes.texParameteri(
+      gl_hiRes.TEXTURE_2D,
+      gl_hiRes.TEXTURE_MAG_FILTER,
+      gl_hiRes.LINEAR
+    );
+    gl_hiRes.texParameteri(
+      gl_hiRes.TEXTURE_2D,
+      gl_hiRes.TEXTURE_WRAP_S,
+      gl_hiRes.CLAMP_TO_EDGE
+    );
+    gl_hiRes.texParameteri(
+      gl_hiRes.TEXTURE_2D,
+      gl_hiRes.TEXTURE_WRAP_T,
+      gl_hiRes.CLAMP_TO_EDGE
+    );
+
+    // now create an image object that will be loaded from server
+    // async
+    fetchLowResMap(gl_hiRes, previewTexObj);
+
+    var previewVerts = [0.0, -90.0, -0.1, 
+                        360.0, -90.0, -0.1,
+                        360.0, 90.0, -0.1,
+                        360.0, 90.0, -0.1,
+                        0.0, 90.0, -0.1, 
+                        0.0, -90.0, -0.1 ];
+    previewVertBuffer = gl_hiRes.createBuffer();
+    gl_hiRes.bindBuffer(gl_hiRes.ARRAY_BUFFER, previewVertBuffer);
+    gl_hiRes.bufferData(gl_hiRes.ARRAY_BUFFER, 
+      new Float32Array(previewVerts), 
+      gl_hiRes.STATIC_DRAW
+    );
+    gl_hiRes.bindBuffer(gl_hiRes.ARRAY_BUFFER, null);
+
+    var previewTexCoord = [0.0, 0.0, 
+                          1.0, 0.0, 
+                          1.0, 1.0, 
+                          1.0, 1.0,
+                          0.0, 1.0, 
+                          0.0, 0.0 ];
+    previewTexCoordBuffer = gl_hiRes.createBuffer();
+    gl_hiRes.bindBuffer(gl_hiRes.ARRAY_BUFFER, previewTexCoordBuffer);
+    gl_hiRes.bufferData(gl_hiRes.ARRAY_BUFFER, 
+      new Float32Array(previewTexCoord), 
+      gl_hiRes.STATIC_DRAW
+    );
+    gl_hiRes.bindBuffer(gl_hiRes.ARRAY_BUFFER, null);
+  }
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -3997,17 +4161,58 @@ function ClearPlots()
 {
   pathVerts = [];
   profileData = [];
-  document.getElementById("imgDownload").setAttribute("style", "display:none");
+
   document.getElementById("imgAreaThreeD").setAttribute("style", "display:none");
   areaRectDefined = false;
-   
+  
+  ResetProfileSlopePoints();
+  
+  UpdateProfileGraph([]);
+  UpdateDownloadButtonVisibility();
+  drawScene_hiRes();
+}
+
+function ResetProfileSlopePoints()
+{
   profileSlopePoints = [];
   profileSlopePoints.push({x: -1000, y: 0, color: "red", size: 3});
   profileSlopePoints.push({x: -1000, y: 0, color: "red", size: 3});
   profileSlopePoints.push({x: -1000, y: 0, color: "red", size: 5});  // One extra for the point that follows the cursor
   
-  UpdateProfileGraph([]);
-  drawScene_hiRes();
+
+  nSlopePoints = 0;
+  slopeInitialized = false;
+  curSlopeCursor = [];
+}
+
+function UpdateDownloadButtonVisibility()
+{
+  var hasProfilePlot = (profile_svg !== null) && (pathVerts.length >= 6) && (profileGraphPoints.length > 0);
+  var shouldShowDownload = areaRectDefined || hasProfilePlot;
+  var displayStyle = shouldShowDownload ? "display:block" : "display:none";
+
+  document.getElementById("imgDownload").setAttribute("style", displayStyle);
+}
+
+function UpdateDownloadButtonTooltip()
+{
+  var titleText = (curMode === profileMode) ? "Download Elevation Profile" : "Download Selected Rectangle";
+  document.getElementById("imgDownload").setAttribute("title", titleText);
+}
+
+function ClearProfileGraph()
+{
+  pathVerts = [];
+  pathPointMoving = -1;
+  firstPathPointMoved = true;
+  profileData = [];
+  profileGraphPoints = [];
+  ResetProfileSlopePoints();
+  profile_graph = null;
+  profile_svg = null;
+
+  d3.select("#svg").selectAll("*").remove();
+  UpdateDownloadButtonVisibility();
 }
 
 function CreateProfileGraph(graphData) {
@@ -4020,7 +4225,7 @@ function CreateProfileGraph(graphData) {
   const marginLeft = 60;
 
   profile_svg = d3
-    .select("svg")
+    .select("#svg")
     .attr("width", width + marginLeft + marginRight)
     .attr("height", height + marginTop + marginBottom)
     .append("g")
@@ -4103,9 +4308,7 @@ function CreateProfileGraph(graphData) {
         })
     );
 
-    profileSlopePoints.push({x: -1000, y: 0, color: "red", size: 3});
-    profileSlopePoints.push({x: -1000, y: 0, color: "red", size: 3});
-    profileSlopePoints.push({x: -1000, y: 0, color: "red", size: 5});  // One extra for the point that follows the cursor
+    ResetProfileSlopePoints();
     var profile_points = profile_svg.selectAll(".profilePoints")
       .data(profileSlopePoints)
       .attr("class", "profilePoints")
@@ -4127,7 +4330,7 @@ function CreateProfileGraph(graphData) {
         .attr("fill", "white")
         .text(d => d));
   
-    var svg = d3.select("svg");
+    var svg = d3.select("#svg");
     document.onclick = (e) => {
       if (e.target.id == "graph_div")
       {
@@ -4330,16 +4533,18 @@ function CreateProfileGraph(graphData) {
     //   // mouse_g.select('circle').attr('cy', y(cnt));
     // });
           
-  // This will be useful later when we want to put in the actual data points
-  //
-  // svg.selectAll("circle")
-  // .data(dataset)
-  // .enter()
-  // .append("circle")
-  // .attr("r", 3)
-  // .attr("fill", "white")
-  // .attr("cx", function(d)
-  //       {
+        if (pathVerts.length >= 6) {
+          renderHeightProfile(gl_hiRes, 1024);
+  
+          LogNewParagraph();
+          LogPrint("Profile:");
+          let elev1 = getHeightFromTileArray(pathVerts[1], pathVerts[0]);  // pathVerts is a 1d array of triples
+          let elev2 = getHeightFromTileArray(pathVerts[4], pathVerts[3]);  // pathVerts is a 1d array of triples
+          LogPrint("Endpoint 1, [Lat: " + (pathVerts[1]).toFixed(2) + ", Lon: " + (pathVerts[0]).toFixed(2) + ", Elev: " + elev1.toFixed(2) + "]", 
+                   12, "yellow");
+          LogPrint("Endpoint 2, [Lat: " + (pathVerts[4]).toFixed(2) + ", Lon: " + (pathVerts[3]).toFixed(2) + ", Elev: " + elev2.toFixed(2) + "]", 
+                   12, "yellow");
+        }
   //         return x(d[0]);
   //       })
   // .attr("cy", function(d)
@@ -4390,6 +4595,8 @@ function UpdateProfileGraph(graphData) {
   profileGraphPoints = [];
   while (tmp.length) profileGraphPoints.push(tmp.splice(0, 4));
 
+  UpdateDownloadButtonVisibility();
+  
   profile_xScale.domain(d3.extent(profileGraphPoints.map((x) => x[0])));
   // console.log("x-range: " + d3.extent(profileGraphPoints.map((x) => x[0])));
   profile_svg

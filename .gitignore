@@ -10,6 +10,7 @@
 *.userosscache
 *.sln.docstates
 *.env
+*.pem
 
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
@@ -398,9 +399,9 @@ FodyWeavers.xsd
 
 # VS Code files for those working on multiple tools
 .vscode/*
-!.vscode/settings.json
+.vscode/settings.json
 !.vscode/tasks.json
-!.vscode/launch.json
+.vscode/launch.json
 !.vscode/extensions.json
 !.vscode/*.code-snippets
 
